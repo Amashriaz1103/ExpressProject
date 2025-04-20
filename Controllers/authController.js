@@ -1,4 +1,4 @@
-const fsPromises = require('fs').promises;
+const { promises: fs } = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -6,60 +6,46 @@ require('dotenv').config();
 
 const userDatabase = {
     usersList: require('../models/users.json'),
-    updateUsers(updatedList) {
-        this.usersList = updatedList;
+    updateUserList(updatedUsers) {
+        this.usersList = updatedUsers;
     }
 };
 
-const loginUser = async (req, res) => {
+const authenticateUser = async (req, res) => {
     const { username, password } = req.body;
 
-    // Validate input
+    // Check for missing fields
     if (!username || !password) {
         return res.status(400).json({ message: "Username and password are required" });
     }
 
-    // Search for user
-    const foundUser = userDatabase.usersList.find(u => u.username === username);
-    if (!foundUser) {
-        return res.status(401).json({ message: "User not found" });
+    // Find the user
+    const user = userDatabase.usersList.find(u => u.username === username);
+    if (!user) {
+        return res.status(401).json({ message: "Invalid username or password" });
     }
 
-    // Compare password with hashed password
-    const isPasswordValid = await bcrypt.compare(password, foundUser.password);
+    // Validate password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) return res.sendStatus(401);
 
-    // Generate JWT tokens
-    const userRoles = Object.values(foundUser.roles);
+    // Generate tokens
     const accessToken = jwt.sign(
-        {
-            UserInfo: {
-                username: foundUser.username,
-                roles: userRoles
-            }
-        },
+        { UserInfo: { username: user.username, roles: Object.values(user.roles) } },
         process.env.ACCESS_TOKEN_SECRET,
         { expiresIn: '30s' }
     );
 
-    const refreshToken = jwt.sign(
-        { username: foundUser.username },
-        process.env.REFRESH_TOKEN_SECRET,
-        { expiresIn: '1d' }
-    );
+    const refreshToken = jwt.sign({ username: user.username }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '1d' });
 
-    // Update user with new refresh token
-    const remainingUsers = userDatabase.usersList.filter(u => u.username !== username);
-    const updatedUserData = { ...foundUser, refreshToken };
-    userDatabase.updateUsers([...remainingUsers, updatedUserData]);
+    // Store the refresh token
+    const updatedUserList = userDatabase.usersList.filter(u => u.username !== username);
+    const updatedUser = { ...user, refreshToken };
+    userDatabase.updateUserList([...updatedUserList, updatedUser]);
 
-    // Write changes to file
-    await fsPromises.writeFile(
-        path.join(__dirname, '..', 'models', 'users.json'),
-        JSON.stringify(userDatabase.usersList, null, 2)
-    );
+    await fs.writeFile(path.join(__dirname, '..', 'models', 'users.json'), JSON.stringify(userDatabase.usersList, null, 2));
 
-    // Set refresh token cookie and send access token
+    // Set refresh token cookie
     res.cookie('jwt', refreshToken, {
         httpOnly: true,
         secure: true,
@@ -70,4 +56,4 @@ const loginUser = async (req, res) => {
     res.json({ accessToken });
 };
 
-module.exports = { loginUser };
+module.exports = { authenticateUser };

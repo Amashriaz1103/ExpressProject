@@ -1,10 +1,10 @@
-const fs = require('fs').promises;
+const { promises: fs } = require('fs');
 const path = require('path');
 
-const userRepository = {
+const userDatabase = {
     usersList: require('../models/users.json'),
-    updateUsers(newUsersList) {
-        this.usersList = newUsersList;
+    updateUserList(updatedUsers) {
+        this.usersList = updatedUsers;
     }
 };
 
@@ -12,14 +12,14 @@ const logoutUser = async (req, res) => {
     const cookies = req.cookies;
 
     if (!cookies?.jwt) {
-        return res.sendStatus(204); // No content to return
+        return res.sendStatus(204); // No content
     }
 
     const refreshToken = cookies.jwt;
 
-    const userFound = userRepository.usersList.find(user => user.refreshToken === refreshToken);
+    // Check if the user exists with this refresh token
+    const userFound = userDatabase.usersList.find(user => user.refreshToken === refreshToken);
 
-    // If no matching refresh token, clear it on client and exit
     if (!userFound) {
         res.clearCookie('jwt', {
             httpOnly: true,
@@ -30,19 +30,14 @@ const logoutUser = async (req, res) => {
         return res.sendStatus(204);
     }
 
-    // Remove the refresh token from the matched user
-    const remainingUsers = userRepository.usersList.filter(user => user.refreshToken !== refreshToken);
+    // Remove refresh token and update the list
+    const updatedUserList = userDatabase.usersList.filter(user => user.refreshToken !== refreshToken);
     const updatedUser = { ...userFound, refreshToken: '' };
+    userDatabase.updateUserList([...updatedUserList, updatedUser]);
 
-    userRepository.updateUsers([...remainingUsers, updatedUser]);
+    await fs.writeFile(path.join(__dirname, '..', 'models', 'users.json'), JSON.stringify(userDatabase.usersList, null, 2));
 
-    // Write the updated users list back to the JSON file
-    await fs.writeFile(
-        path.join(__dirname, '..', 'models', 'users.json'),
-        JSON.stringify(userRepository.usersList, null, 2)
-    );
-
-    // Clear the cookie from the client
+    // Clear the cookie from the client's browser
     res.clearCookie('jwt', {
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
