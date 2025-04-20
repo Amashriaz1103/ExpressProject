@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 
-const regController = require('../../controllers/registerController')
+const regController = require('../../Controllers/registerController')
 
 router.post('/',regController.handleNewUser);
 

@@ -1,80 +1,90 @@
-const data = {
-    employees: require("../models/employees.json"),
-    setEmployees: function (data) {
-      this.employees = data;
-    },
+const fileData = {
+  employeesList: require("../models/employees.json"),
+  updateEmployees(updatedData) {
+      this.employeesList = updatedData;
+  }
+};
+
+// Fetch all employee records
+const fetchAllEmployees = (req, res) => {
+  res.json(fileData.employeesList);
+};
+
+// Add a new employee
+const addNewEmployee = (req, res) => {
+  const { firstname, lastname } = req.body;
+
+  if (!firstname || !lastname) {
+      return res.status(400).json({ message: "Both first and last name are required" });
+  }
+
+  const newEmployeeId = fileData.employeesList.length
+      ? fileData.employeesList[fileData.employeesList.length - 1]._id + 1
+      : 1;
+
+  const newEmployee = {
+      _id: newEmployeeId,
+      firstname,
+      lastname
   };
-  
-  const getAllEmployees = (req, res) => {
-    res.json(data.employees);
-  };
-  
-  const createNewEmployee = (req, res) => {
-    const newEmployee = {
-      _id: data.employees.length > 0 ? data.employees[data.employees.length - 1]._id + 1 : 1,
-      firstname: req.body.firstname,
-      lastname: req.body.lastname,
-    };
-    
-    if (!newEmployee.firstname || !newEmployee.lastname)
-      return res.status(400).json({ message: "First and last name required" });
-      
-    data.setEmployees([...data.employees, newEmployee]);
-    res.status(201).json(data.employees);
-  };
-  
-  const updateEmployee = (req, res) => {
-    const employee = data.employees.find(
-      (emp) => emp._id === parseInt(req.body._id)
-    );
-    
-    if (!employee)
-      return res.status(400).json({ message: 'Employee not found' });
-      
-    if (req.body.firstname) employee.firstname = req.body.firstname;
-    if (req.body.lastname) employee.lastname = req.body.lastname;
-    
-    const filteredArray = data.employees.filter(
-      emp => emp._id !== parseInt(req.body._id)
-    );
-    
-    const unsortedArray = [...filteredArray, employee];
-    data.setEmployees(unsortedArray.sort((a, b) => a._id > b._id ? 1 : a._id < b._id ? -1 : 0));
-    
-    res.json(data.employees);
-  };
-  
-  const deleteEmployee = (req, res) => {
-    const employee = data.employees.find(
-      (emp) => emp._id === parseInt(req.body.id)
-    );
-    
-    if (!employee)
-      return res.status(400).json({ message: 'Employee not found' });
-      
-    const filteredArray = data.employees.filter(
-      emp => emp._id !== parseInt(req.body.id)
-    );
-    
-    data.setEmployees(filteredArray);
-    res.json(data.employees);
-  };
-  
-  const getEmployee = (req, res) => {
-    const employee = data.employees.find(
-      (emp) => emp._id === parseInt(req.params._id)
-    );
-    
-    if (!employee)
-      return res.status(400).json({ message: 'Employee not found' });
-      
-    res.json(employee);
-  };
-  
-  module.exports = {
-    getAllEmployees,
-    getEmployee,
-    createNewEmployee,
-    deleteEmployee,
-    updateEmployee,
-  };
+
+  fileData.updateEmployees([...fileData.employeesList, newEmployee]);
+  res.status(201).json(fileData.employeesList);
+};
+
+// Modify an existing employee
+const modifyEmployee = (req, res) => {
+  const { _id, firstname, lastname } = req.body;
+  const employeeId = parseInt(_id);
+
+  const employee = fileData.employeesList.find(emp => emp._id === employeeId);
+
+  if (!employee) {
+      return res.status(400).json({ message: "Employee not found" });
+  }
+
+  if (firstname) employee.firstname = firstname;
+  if (lastname) employee.lastname = lastname;
+
+  const updatedEmployees = fileData.employeesList
+      .filter(emp => emp._id !== employeeId)
+      .concat(employee)
+      .sort((a, b) => a._id - b._id);
+
+  fileData.updateEmployees(updatedEmployees);
+  res.json(fileData.employeesList);
+};
+
+// Delete an employee entry
+const removeEmployee = (req, res) => {
+  const employeeId = parseInt(req.body.id);
+  const employeeExists = fileData.employeesList.find(emp => emp._id === employeeId);
+
+  if (!employeeExists) {
+      return res.status(400).json({ message: "Employee not found" });
+  }
+
+  const remainingEmployees = fileData.employeesList.filter(emp => emp._id !== employeeId);
+  fileData.updateEmployees(remainingEmployees);
+  res.json(remainingEmployees);
+};
+
+// Fetch a specific employee by ID
+const fetchEmployeeById = (req, res) => {
+  const id = parseInt(req.params._id);
+  const foundEmployee = fileData.employeesList.find(emp => emp._id === id);
+
+  if (!foundEmployee) {
+      return res.status(400).json({ message: "Employee not found" });
+  }
+
+  res.json(foundEmployee);
+};
+
+module.exports = {
+  fetchAllEmployees,
+  addNewEmployee,
+  modifyEmployee,
+  removeEmployee,
+  fetchEmployeeById
+};

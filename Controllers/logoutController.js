@@ -1,37 +1,56 @@
-const userDB = {
-    users: require('../models/users.json'),
-    setUsers: function (data) {
-        this.users = data
-    }
-}
-
-const fsPromises = require('fs').promises;
+const fs = require('fs').promises;
 const path = require('path');
 
-const handleLogout = async (req, res) => {
+const userRepository = {
+    usersList: require('../models/users.json'),
+    updateUsers(newUsersList) {
+        this.usersList = newUsersList;
+    }
+};
 
+const logoutUser = async (req, res) => {
     const cookies = req.cookies;
-    if (!cookies?.jwt) return res.sendStatus(204); // No content to send back
-    
+
+    if (!cookies?.jwt) {
+        return res.sendStatus(204); // No content to return
+    }
+
     const refreshToken = cookies.jwt;
 
-    const foundUser = userDB.users.find(person => person.refreshToken === refreshToken);
-    if (!foundUser) {
-        res.clearCookie('jwt', { httpOnly: true, maxAge: 24 * 60 * 60 * 1000 ,samesite:'none',secure:true});
+    const userFound = userRepository.usersList.find(user => user.refreshToken === refreshToken);
+
+    // If no matching refresh token, clear it on client and exit
+    if (!userFound) {
+        res.clearCookie('jwt', {
+            httpOnly: true,
+            maxAge: 24 * 60 * 60 * 1000,
+            sameSite: 'none',
+            secure: true
+        });
         return res.sendStatus(204);
     }
 
-    const otherUsers = userDB.users.filter(person => person.refreshToken !== refreshToken);
-    const currentUser = { ...foundUser, refreshToken: '' };
-    userDB.setUsers([...otherUsers, currentUser]);
-    
-    await fsPromises.writeFile(
+    // Remove the refresh token from the matched user
+    const remainingUsers = userRepository.usersList.filter(user => user.refreshToken !== refreshToken);
+    const updatedUser = { ...userFound, refreshToken: '' };
+
+    userRepository.updateUsers([...remainingUsers, updatedUser]);
+
+    // Write the updated users list back to the JSON file
+    await fs.writeFile(
         path.join(__dirname, '..', 'models', 'users.json'),
-        JSON.stringify(userDB.users)
+        JSON.stringify(userRepository.usersList, null, 2)
     );
 
-    res.clearCookie('jwt', { httpOnly: true, maxAge: 24 * 60 * 60 * 1000 ,samesite:'none',secure:true});
-    res.sendStatus(204);
-}
+    // Clear the cookie from the client
+    res.clearCookie('jwt', {
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000,
+        sameSite: 'none',
+        secure: true
+    });
 
-module.exports = { handleLogout };
+    res.sendStatus(204);
+};
+
+module.exports = { logoutUser };
